@@ -10,7 +10,7 @@
     { cmd: 'init --env production',              ok: false, t: 180  },
     { cmd: 'load jvm_runtime --spring-boot-3.5', ok: true,  t: 480  },
     { cmd: 'mount portfolio@jawaharbharathi',     ok: true,  t: 780  },
-    { cmd: 'connect postgresql://schemaforge',   ok: true,  t: 1050 },
+    { cmd: 'connect postgresql://interviewforge',ok: true,  t: 1050 },
     { cmd: 'compile assets --next-js-15',        ok: true,  t: 1320 },
     { cmd: 'start server 0.0.0.0:3000',          ok: true,  t: 1580 },
   ];
@@ -55,18 +55,36 @@
   }, 1820);
 })();
 
-// ── CUSTOM CURSOR ──
-const c1 = document.getElementById('c1');
-let mx = window.innerWidth / 2, my = window.innerHeight / 2;
+// ── CUSTOM CURSOR — Fast dot + ring (no lag) ──
+const cursorDot  = document.getElementById('cursor-dot');
+const cursorRing = document.getElementById('cursor-ring');
 
+let mouseX = window.innerWidth / 2;
+let mouseY = window.innerHeight / 2;
+let ringX  = mouseX;
+let ringY  = mouseY;
+let ringRaf = null;
+
+// Dot follows mouse instantly (no lag)
 document.addEventListener('mousemove', e => {
-  mx = e.clientX;
-  my = e.clientY;
-  c1.style.left = `${mx}px`;
-  c1.style.top = `${my}px`;
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  cursorDot.style.left = `${mouseX}px`;
+  cursorDot.style.top  = `${mouseY}px`;
 });
 
-document.querySelectorAll('a, button, .contact-link, .btn-a, .btn-b, .email-btn, .project-item, .hero-terminal, .commit-card, .skill-group, .stat-box').forEach(el => {
+// Ring follows with gentle lerp for smoothness without slowness
+function animateRing() {
+  const ease = 0.14;
+  ringX += (mouseX - ringX) * ease;
+  ringY += (mouseY - ringY) * ease;
+  cursorRing.style.left = `${ringX}px`;
+  cursorRing.style.top  = `${ringY}px`;
+  ringRaf = requestAnimationFrame(animateRing);
+}
+animateRing();
+
+document.querySelectorAll('a, button, .contact-link, .btn-a, .btn-b, .email-btn, .project-item, .hero-terminal, .commit-card, .skill-group, .stat-box, .about-social-btn').forEach(el => {
   el.addEventListener('mouseenter', () => document.body.classList.add('cursor-hover'));
   el.addEventListener('mouseleave', () => document.body.classList.remove('cursor-hover'));
 });
@@ -91,31 +109,6 @@ document.querySelectorAll('.project-item').forEach(item => {
     hc.style.top  = `${e.clientY - 75}px`;
   });
 });
-
-// ── STATS COUNTER ANIMATION ──
-const aboutSection = document.querySelector('.about');
-if (aboutSection) {
-  new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      entry.target.querySelectorAll('[data-count]').forEach(el => {
-        if (el.classList.contains('counted')) return;
-        el.classList.add('counted');
-        const target = +el.dataset.count;
-        let current = 0;
-        const interval = setInterval(() => {
-          current += target / 60;
-          if (current >= target) {
-            current = target;
-            clearInterval(interval);
-          }
-          const suffix = target >= 10 ? '+' : '';
-          el.textContent = Math.round(current) + (target === 100 ? '+' : suffix);
-        }, 18);
-      });
-    });
-  }, { threshold: 0.3 }).observe(aboutSection);
-}
 
 // ── HERO NAME SCRAMBLE ──
 const chars = '█▓▒░◆◇○●$¥▰▱▲▼';
@@ -172,6 +165,43 @@ document.querySelectorAll('.fi').forEach(el => {
   }, { threshold: 0.07 }).observe(el);
 });
 
+// ── ANIMATED METRIC COUNTERS ──
+const metricObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    entry.target.querySelectorAll('.metric-num[data-target]').forEach(el => {
+      if (el.dataset.animated) return;
+      el.dataset.animated = '1';
+      const target  = +el.dataset.target;
+      const suffix  = el.dataset.suffix || '';
+      const duration = 1600;
+      const start    = performance.now();
+      function tick(now) {
+        const p = Math.min((now - start) / duration, 1);
+        // Ease out expo
+        const eased = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+        el.textContent = Math.round(eased * target) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    });
+    metricObserver.unobserve(entry.target);
+  });
+}, { threshold: 0.3 });
+
+const metricsSection = document.querySelector('.metrics-row');
+if (metricsSection) metricObserver.observe(metricsSection);
+
+// ── TECH ORBIT: propagate --speed to child .o-tag so counter-animations sync ──
+document.querySelectorAll('.orbit-arm').forEach(arm => {
+  const speed = getComputedStyle(arm).getPropertyValue('--speed').trim();
+  arm.querySelectorAll('.o-tag').forEach(tag => {
+    tag.style.setProperty('--speed', speed);
+    tag.style.animationDelay = arm.style.getPropertyValue('--delay') || '0s';
+  });
+});
+
+
 // ── CONTACT EMAIL HANDLER ──
 const emailBtn = document.getElementById('email-contact-btn');
 if (emailBtn) {
@@ -183,17 +213,6 @@ if (emailBtn) {
     a.click();
   });
 }
-
-// ── RESUME DOWNLOAD HANDLER ──
-[document.getElementById('resume-dl-btn'), document.getElementById('resume-dl-footer')].forEach(btn => {
-  if (btn) {
-    btn.addEventListener('click', e => {
-      e.preventDefault();
-      // Replace with actual resume URL when available
-      alert('Resume link coming soon! Check back or connect on LinkedIn.');
-    });
-  }
-});
 
 // ── NEURAL CONSTELLATION CANVAS ──
 function initNeuralCanvas() {
@@ -233,7 +252,7 @@ function initNeuralCanvas() {
     draw() {
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+      ctx.fillStyle = 'rgba(129, 140, 248, 0.4)';
       ctx.fill();
     }
   }
@@ -257,17 +276,17 @@ function initNeuralCanvas() {
           ctx.beginPath();
           ctx.moveTo(particles[i].x, particles[i].y);
           ctx.lineTo(particles[j].x, particles[j].y);
-          ctx.strokeStyle = `rgba(0, 229, 255, ${alpha})`;
+          ctx.strokeStyle = `rgba(129, 140, 248, ${alpha})`;
           ctx.lineWidth = 0.7;
           ctx.stroke();
         }
       }
 
       const rect = canvas.getBoundingClientRect();
-      const mcx = mx - rect.left;
-      const mcy = my - rect.top;
+      const mcx = mouseX - rect.left;
+      const mcy = mouseY - rect.top;
 
-      if (mx >= rect.left && mx <= rect.right && my >= rect.top && my <= rect.bottom) {
+      if (mouseX >= rect.left && mouseX <= rect.right && mouseY >= rect.top && mouseY <= rect.bottom) {
         const dx = particles[i].x - mcx;
         const dy = particles[i].y - mcy;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -277,7 +296,7 @@ function initNeuralCanvas() {
           ctx.beginPath();
           ctx.moveTo(particles[i].x, particles[i].y);
           ctx.lineTo(mcx, mcy);
-          ctx.strokeStyle = `rgba(0, 229, 255, ${alpha})`;
+          ctx.strokeStyle = `rgba(192, 132, 252, ${alpha})`;
           ctx.lineWidth = 1.0;
           ctx.stroke();
         }
